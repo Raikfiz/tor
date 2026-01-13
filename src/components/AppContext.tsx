@@ -66,7 +66,7 @@ interface AppContextType {
   currentLanguage: Language;
   
   // Actions
-  addCatch: (catch_: Omit<Catch, 'id' | 'date'>) => void;
+  addCatch: (catch_: Omit<Catch, 'id' | 'date'>) => Promise<void>;
   updateCatch: (id: string, catch_: Partial<Catch>) => void;
   deleteCatch: (id: string) => void;
   deleteAllCatches: () => void;
@@ -215,7 +215,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addCatch = async (catchData: Omit<Catch, 'id' | 'date'>) => {
-    if (!currentUserId) return;
+    if (!currentUserId) {
+      throw new Error('Пользователь не авторизован. Пожалуйста, войдите в систему.');
+    }
 
     const newCatch: Catch = {
       ...catchData,

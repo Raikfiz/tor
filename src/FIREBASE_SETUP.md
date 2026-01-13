@@ -58,13 +58,20 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Пользователь может читать и писать только свои данные
     match /catches/{catchId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      // Разрешаем создание, если userId совпадает с авторизованным пользователем
+      allow create: if request.auth != null 
+                   && request.auth.uid == request.resource.data.userId;
+      
+      // Разрешаем чтение и обновление только своих документов
+      allow read, update, delete: if request.auth != null 
+                                   && request.auth.uid == resource.data.userId;
     }
     
     match /fishingSpots/{spotId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow create: if request.auth != null 
+                   && request.auth.uid == request.resource.data.userId;
+      allow read, update, delete: if request.auth != null 
+                                  && request.auth.uid == resource.data.userId;
     }
     
     match /userSettings/{userId} {

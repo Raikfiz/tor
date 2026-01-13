@@ -9,12 +9,10 @@ import { Camera, MapPin } from 'lucide-react';
 import { useApp } from './AppContext';
 import { toast } from 'sonner@2.0.3';
 
-// 1. ИМПОРТИРУЕМ FIREBASE
-import { doc, setDoc, collection, addDoc } from 'firebase/firestore';
-import { db } from '..//components/firebase/config'; // укажите правильный путь к вашей конфигурации Firebase
+// Импорты Firebase больше не нужны - используем сервис через контекст
 
 export function AddCatchModal() {
-  const { showAddCatchModal, setShowAddCatchModal, addCatch, fishingSpots } = useApp();
+  const { showAddCatchModal, setShowAddCatchModal, addCatch, fishingSpots, isAuthenticated } = useApp();
   const [formData, setFormData] = useState({
     fishType: '',
     weight: '',
@@ -32,6 +30,11 @@ export function AddCatchModal() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!isAuthenticated) {
+      toast.error('Для сохранения улова необходимо войти в систему');
+      return;
+    }
+    
     if (!formData.fishType || !formData.weight) {
       toast.error('Заполните обязательные поля: вид рыбы и вес');
       return;
@@ -47,20 +50,10 @@ export function AddCatchModal() {
       const catchData = {
         ...formData,
         location,
-        createdAt: new Date(), // добавляем временную метку
-        updatedAt: new Date()
       };
       
-      // 4. СОХРАНЯЕМ В FIREBASE
-      // Вариант 1: с автоматическим ID
-      await addDoc(collection(db, 'catches'), catchData);
-      
-      // Или Вариант 2: с кастомным ID (раскомментируйте если нужно)
-      // const newCatchRef = doc(collection(db, 'catches'));
-      // await setDoc(newCatchRef, catchData);
-      
-      // 5. ТЕПЕРЬ ВЫЗЫВАЕМ ФУНКЦИЮ ИЗ КОНТЕКСА
-      addCatch(catchData);
+      // Используем функцию из контекста, которая правильно сохраняет в Firebase с userId
+      await addCatch(catchData);
       
       toast.success(`Улов записан: ${formData.fishType} ${formData.weight} кг`);
       
@@ -75,9 +68,20 @@ export function AddCatchModal() {
       });
       setShowAddCatchModal(false);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Ошибка при сохранении в Firebase:', error);
-      toast.error('Ошибка при сохранении данных');
+      
+      // Более информативные сообщения об ошибках
+      let errorMessage = 'Ошибка при сохранении данных';
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.code === 'permission-denied' || error?.code === 'permissions-denied') {
+        errorMessage = 'Недостаточно прав доступа. Проверьте, что вы авторизованы и правила безопасности Firebase настроены правильно.';
+      } else if (error?.code) {
+        errorMessage = `Ошибка Firebase: ${error.code}`;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

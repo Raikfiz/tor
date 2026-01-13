@@ -14,6 +14,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './config';
+import { auth } from './config';
 
 // Типы данных
 export interface FirebaseCatch {
@@ -81,15 +82,85 @@ export const catchesService = {
 
   // Добавить улов
   async addCatch(userId: string, catchData: Omit<FirebaseCatch, 'id' | 'userId' | 'createdAt' | 'date'> & { date: Date }): Promise<string> {
+    // Проверяем, что пользователь авторизован
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Пользователь не авторизован. Пожалуйста, войдите в систему.');
+    }
+    
+    if (currentUser.uid !== userId) {
+      throw new Error('ID пользователя не совпадает с авторизованным пользователем.');
+    }
+    
     const catchesRef = collection(db, 'catches');
-    const newCatch = {
-      userId,
-      ...catchData,
+    
+    // Создаем объект данных для сохранения
+    // ВАЖНО: userId должен быть строкой и присутствовать в данных для проверки правил безопасности
+    const newCatch: any = {
+      userId: String(userId), // Явно преобразуем в строку и ставим первым
+      fishType: String(catchData.fishType || ''),
+      weight: String(catchData.weight || ''),
+      length: String(catchData.length || ''),
+      location: String(catchData.location || ''),
+      bait: String(catchData.bait || ''),
+      notes: String(catchData.notes || ''),
       date: Timestamp.fromDate(catchData.date),
       createdAt: serverTimestamp(),
     };
-    const docRef = await addDoc(catchesRef, newCatch);
-    return docRef.id;
+    
+    // Удаляем пустые строки из необязательных полей (но оставляем их, если они есть)
+    // Удаляем только undefined значения
+    Object.keys(newCatch).forEach(key => {
+      if (newCatch[key] === undefined) {
+        delete newCatch[key];
+      }
+    });
+    
+    // Детальное логирование для отладки
+    console.log('=== ДОБАВЛЕНИЕ УЛОВА В FIREBASE ===');
+    console.log('Текущий пользователь:', {
+      uid: currentUser.uid,
+      email: currentUser.email,
+      displayName: currentUser.displayName,
+    });
+    console.log('Переданный userId:', userId);
+    console.log('Данные для сохранения:', JSON.stringify(newCatch, null, 2));
+    console.log('Проверка userId:', {
+      userIdType: typeof userId,
+      userIdValue: userId,
+      currentUserUid: currentUser.uid,
+      match: currentUser.uid === userId,
+      userIdInData: newCatch.userId,
+      userIdInDataMatch: newCatch.userId === currentUser.uid,
+    });
+    
+    try {
+      // Проверяем, что коллекция существует (она создастся автоматически при первом документе)
+      console.log('📦 Попытка сохранения в коллекцию "catches"');
+      console.log('   Collection path:', catchesRef.path);
+      
+      // Используем setDoc с явным ID документа (как при регистрации)
+      // Это может помочь обойти проблемы с правилами безопасности
+      const newCatchRef = doc(catchesRef);
+      console.log('   Document path:', newCatchRef.path);
+      console.log('   Document ID будет сгенерирован автоматически');
+      
+      await setDoc(newCatchRef, newCatch);
+      console.log('✅ Улов успешно добавлен с ID:', newCatchRef.id);
+      console.log('   Коллекция "catches" теперь существует в Firestore');
+      return newCatchRef.id;
+    } catch (error: any) {
+      console.error('❌ ОШИБКА ПРИ ДОБАВЛЕНИИ УЛОВА:', {
+        error,
+        code: error?.code,
+        message: error?.message,
+        userId,
+        currentUserUid: currentUser.uid,
+        userIdInData: newCatch.userId,
+        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      });
+      throw error;
+    }
   },
 
   // Обновить улов
